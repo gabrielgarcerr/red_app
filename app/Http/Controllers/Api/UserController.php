@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
@@ -42,7 +43,7 @@ class UserController extends Controller
             ],
 
             'password' => [
-                'required',
+                'nullable',
                 'string',
                 'min:6',
             ],
@@ -51,6 +52,12 @@ class UserController extends Controller
                 'nullable',
                 'string',
                 'max:20',
+            ],
+
+            'image' => [
+                'nullable',
+                'image',
+                'max:2048',
             ],
         ]);
 
@@ -61,12 +68,19 @@ class UserController extends Controller
                 ?? null,
 
             'password' => Hash::make(
-                $datosValidados['password']
+                $datosValidados['password'] ?? '12345678'
             ),
 
             'phone' => $datosValidados['phone']
                 ?? null,
         ]);
+
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('users', 'public');
+            $user->image()->create([
+                'url' => asset(Storage::url($path)),
+            ]);
+        }
 
         return UserResource::make($user);
     }
@@ -119,6 +133,12 @@ class UserController extends Controller
                 'string',
                 'max:20',
             ],
+
+            'image' => [
+                'nullable',
+                'image',
+                'max:2048',
+            ],
         ]);
 
         $data = [];
@@ -166,6 +186,19 @@ class UserController extends Controller
 
         $user->update($data);
 
+        if ($request->hasFile('image')) {
+            if ($user->image) {
+                $oldPath = str_replace(asset('storage/'), '', $user->image->url);
+                Storage::disk('public')->delete($oldPath);
+                $user->image->delete();
+            }
+
+            $path = $request->file('image')->store('users', 'public');
+            $user->image()->create([
+                'url' => asset(Storage::url($path)),
+            ]);
+        }
+
         $user->refresh();
 
         return response()->json([
@@ -185,6 +218,12 @@ class UserController extends Controller
     ): JsonResponse {
 
         $userName = $user->name;
+
+        if ($user->image) {
+            $oldPath = str_replace(asset('storage/'), '', $user->image->url);
+            Storage::disk('public')->delete($oldPath);
+            $user->image->delete();
+        }
 
         $user->delete();
 
